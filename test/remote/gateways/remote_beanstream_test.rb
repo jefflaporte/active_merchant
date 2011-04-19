@@ -147,4 +147,63 @@ class RemoteBeanstreamTest < Test::Unit::TestCase
     assert_failure response
     assert_equal 'Invalid merchant id (merchant_id = 0)', response.message
   end
+  
+  def test_successful_add_to_vault_with_store_method
+    assert response = @gateway.store(@visa,@options)
+    assert_equal 'Operation Successful', response.message
+    assert_success response
+    assert_not_nil response.params["customer_vault_id"]
+  end
+  
+  def test_add_to_vault_with_custom_vault_id_with_store_method
+    @options[:vault_id] = rand(100000)+10001
+    assert response = @gateway.store(@visa, @options.dup)
+    assert_equal 'Operation Successful', response.message
+    assert_success response
+    assert_equal @options[:vault_id], response.params["customer_vault_id"].to_i
+  end
+
+  def test_update_vault
+    test_add_to_vault_with_custom_vault_id_with_store_method
+    assert response = @gateway.update(@options[:vault_id], @mastercard)
+    assert_success response
+    assert_equal 'Operation Successful', response.message
+  end
+  
+  def test_delete_from_vault
+    test_add_to_vault_with_custom_vault_id_with_store_method
+    assert response = @gateway.delete(@options[:vault_id])
+    assert_success response
+    assert_equal 'Operation Successful', response.message
+  end
+  
+  def test_delete_from_vault_with_unstore_method
+    test_add_to_vault_with_custom_vault_id_with_store_method
+    assert response = @gateway.unstore(@options[:vault_id])
+    assert_success response
+    assert_equal 'Operation Successful', response.message
+  end
+  
+  def test_successful_add_to_vault_and_use
+    test_add_to_vault_with_custom_vault_id_with_store_method
+    assert second_response = @gateway.purchase(@amount*2, @options[:vault_id], @options)
+    assert_equal 'Approved', second_response.message
+    assert second_response.success?  
+  end
+  
+  def test_unsuccessful_visa_with_vault
+    test_add_to_vault_with_custom_vault_id_with_store_method
+    assert response = @gateway.update(@options[:vault_id], @declined_visa)
+    assert_success response
+    
+    assert second_response = @gateway.purchase(@amount*2, @options[:vault_id], @options)
+    assert_equal 'DECLINE', second_response.message
+  end
+  
+  def test_unsuccessful_closed_profile_charge
+    test_delete_from_vault
+    assert second_response = @gateway.purchase(@amount*2, @options[:vault_id], @options)
+    assert_failure second_response
+    assert_equal "Invalid customer code.", second_response.message
+  end
 end
